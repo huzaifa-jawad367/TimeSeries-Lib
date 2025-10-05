@@ -715,24 +715,50 @@ class Dataset_Battery(Dataset):
                 self.scaler = StandardScaler()
                 self.scaler.fit(data_values)
                 # Save scaler for validation and test sets
-                with open(scaler_path, 'wb') as f:
-                    pickle.dump(self.scaler, f)
+                try:
+                    with open(scaler_path, 'wb') as f:
+                        pickle.dump(self.scaler, f)
+                    print(f'✅ Scaler saved to {scaler_path}')
+                except Exception as e:
+                    print(f'⚠️  Warning: Could not save scaler to {scaler_path}: {e}')
             else:  # Validation or test data - load fitted scaler
                 if os.path.exists(scaler_path):
-                    with open(scaler_path, 'rb') as f:
-                        self.scaler = pickle.load(f)
+                    try:
+                        with open(scaler_path, 'rb') as f:
+                            self.scaler = pickle.load(f)
+                        print(f'✅ Scaler loaded from {scaler_path}')
+                    except Exception as e:
+                        print(f'⚠️  Warning: Could not load scaler from {scaler_path}: {e}')
+                        self.scaler = None
                 else:
-                    # Fallback: create a new scaler (shouldn't happen in normal usage)
+                    print(f'⚠️  Warning: Scaler file {scaler_path} not found. Creating fallback scaler.')
+                    self.scaler = None
+                
+                # If scaler is None (file missing or corrupted), create fallback
+                if self.scaler is None:
                     self.scaler = StandardScaler()
                     # Fit on training data as fallback - load b1c0 training data
                     train_csv = os.path.join(self.root_path, 'b1c0_for_model.csv')
                     if os.path.exists(train_csv):
-                        train_df = pd.read_csv(train_csv)
-                        train_df['timestamp'] = pd.to_datetime(train_df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
-                        train_df = train_df.set_index('timestamp')
-                        train_features = [col for col in battery_features if col in train_df.columns]
-                        train_data = train_df[train_features].iloc[:int(0.7 * len(train_df))].values
-                        self.scaler.fit(train_data)
+                        try:
+                            train_df = pd.read_csv(train_csv)
+                            train_df['timestamp'] = pd.to_datetime(train_df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
+                            train_df = train_df.set_index('timestamp')
+                            train_features = [col for col in battery_features if col in train_df.columns]
+                            train_data = train_df[train_features].iloc[:int(0.7 * len(train_df))].values
+                            self.scaler.fit(train_data)
+                            print(f'✅ Fallback scaler fitted on training data from {train_csv}')
+                        except Exception as e:
+                            print(f'❌ Error creating fallback scaler from training data: {e}')
+                            # Last resort: fit on current data
+                            self.scaler.fit(data_values)
+                            print('⚠️  Warning: Using current data for scaler fitting (not recommended)')
+                    else:
+                        print(f'❌ Error: Training CSV {train_csv} not found for fallback scaler')
+                        # Last resort: fit on current data
+                        self.scaler.fit(data_values)
+                        print('⚠️  Warning: Using current data for scaler fitting (not recommended)')
+            
             data = self.scaler.transform(data_values)
         else:
             data = data_values
