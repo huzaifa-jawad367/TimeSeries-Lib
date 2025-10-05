@@ -92,7 +92,13 @@ class Exp_Short_Term_Forecast(Exp_Basic):
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
 
                 batch_y_mark = batch_y_mark[:, -self.args.pred_len:, f_dim:].to(self.device)
-                loss_value = criterion(batch_x, self.args.frequency_map, outputs, batch_y, batch_y_mark)
+                # Handle different loss function signatures
+                if hasattr(self.args, 'data') and self.args.data == 'm4':
+                    # M4 dataset uses custom loss with multiple arguments
+                    loss_value = criterion(batch_x, self.args.frequency_map, outputs, batch_y, batch_y_mark)
+                else:
+                    # Standard loss functions only need prediction and target
+                    loss_value = criterion(outputs, batch_y)
                 loss_sharpness = mse((outputs[:, 1:, :] - outputs[:, :-1, :]), (batch_y[:, 1:, :] - batch_y[:, :-1, :]))
                 loss = loss_value  # + loss_sharpness * 1e-5
                 train_loss.append(loss.item())
@@ -152,7 +158,13 @@ class Exp_Short_Term_Forecast(Exp_Basic):
             true = torch.from_numpy(np.array(y))
             batch_y_mark = torch.ones(true.shape)
 
-            loss = criterion(x.detach().cpu()[:, :, 0], self.args.frequency_map, pred[:, :, 0], true, batch_y_mark)
+            # Handle different loss function signatures
+            if hasattr(self.args, 'data') and self.args.data == 'm4':
+                # M4 dataset uses custom loss with multiple arguments
+                loss = criterion(x.detach().cpu()[:, :, 0], self.args.frequency_map, pred[:, :, 0], true, batch_y_mark)
+            else:
+                # Standard loss functions only need prediction and target
+                loss = criterion(pred[:, :, 0], true)
 
         self.model.train()
         return loss
