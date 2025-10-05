@@ -613,6 +613,176 @@ class SWATSegLoader(Dataset):
                 self.test_labels[index // self.step * self.win_size:index // self.step * self.win_size + self.win_size])
 
 
+class Dataset_Battery(Dataset):
+    """
+    Dataset class for battery time series data.
+    Handles multiple battery series with cycle-based data.
+    """
+    def __init__(self, args, root_path, flag='train', size=None,
+                 features='MS', data_path=None,
+                 target='discharge_capacity', scale=True, timeenc=0, freq='D', seasonal_patterns=None):
+        # size [seq_len, label_len, pred_len]
+        self.args = args
+        # info
+        if size == None:
+            self.seq_len = 24  # default context window
+            self.label_len = 8  # default label length
+            self.pred_len = 8   # default prediction length
+        else:
+            self.seq_len = size[0]
+            self.label_len = size[1]
+            self.pred_len = size[2]
+        
+        # init
+        assert flag in ['train', 'test', 'val']
+        type_map = {'train': 0, 'val': 1, 'test': 2}
+        self.set_type = type_map[flag]
+
+        self.features = features
+        self.target = target
+        self.scale = scale
+        self.timeenc = timeenc
+        self.freq = freq
+        self.seasonal_patterns = seasonal_patterns
+
+        self.root_path = root_path
+        self.data_path = data_path
+        self.__read_data__()
+
+    def __read_data__(self):
+        import glob
+        import os
+        import pickle
+        
+        # Load battery data based on train/val/test split
+        if self.set_type == 0 or self.set_type == 1:  # train or val - use b1c0_for_model.csv
+            csv_file = os.path.join(self.root_path, 'b1c0_for_model.csv')
+            if not os.path.exists(csv_file):
+                raise FileNotFoundError(f"Training CSV file not found: {csv_file}")
+        else:  # test - use other CSV files
+            # Look for other CSV files (excluding b1c0)
+            csv_files = glob.glob(os.path.join(self.root_path, '*_for_model.csv'))
+            csv_files = [f for f in csv_files if 'b1c0' not in f]
+            
+            if not csv_files:
+                raise FileNotFoundError(f"No test CSV files found in {self.root_path} (excluding b1c0)")
+            
+            # Use the first available test file (or could be randomized)
+            csv_file = csv_files[0]
+        
+        # Load battery series
+        df = pd.read_csv(csv_file)
+        series_id = os.path.basename(csv_file).replace('_for_model.csv', '')
+        
+        # Create timestamp from cycle_index
+        df['timestamp'] = pd.to_datetime(df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
+        df = df.set_index('timestamp')
+        
+        # Select relevant columns
+        battery_features = ['charge_capacity', 'discharge_capacity', 'internal_resistance', 
+                          'temperature_mean', 'temperature_min', 'temperature_max']
+        
+        # Ensure all required columns exist
+        available_features = [col for col in battery_features if col in df.columns]
+        if not available_features:
+            raise ValueError(f"No valid battery features found in {csv_file}. Available columns: {df.columns.tolist()}")
+            
+        df_subset = df[available_features].astype('float32')
+        
+        # Split data based on train/val/test
+        if self.set_type == 0 or self.set_type == 1:  # train or val from b1c0
+            total_length = len(df_subset)
+            train_end = int(0.7 * total_length)
+            
+            if self.set_type == 0:  # train
+                split_data = df_subset.iloc[:train_end].copy()
+            else:  # val
+                split_data = df_subset.iloc[train_end:].copy()
+        else:  # test - use all data from other CSV files
+            split_data = df_subset.copy()
+        
+        # Reset index for processing
+        split_data = split_data.reset_index(drop=True)
+        
+        # Get feature columns (no series_id since we're using single series)
+        feature_cols = split_data.columns.tolist()
+        data_values = split_data.values
+        
+        # Handle scaling - fit scaler on training data and save/load it
+        scaler_path = os.path.join(self.root_path, 'battery_scaler.pkl')
+        if self.scale:
+            if self.set_type == 0:  # Training data - fit scaler
+                self.scaler = StandardScaler()
+                self.scaler.fit(data_values)
+                # Save scaler for validation and test sets
+                with open(scaler_path, 'wb') as f:
+                    pickle.dump(self.scaler, f)
+            else:  # Validation or test data - load fitted scaler
+                if os.path.exists(scaler_path):
+                    with open(scaler_path, 'rb') as f:
+                        self.scaler = pickle.load(f)
+                else:
+                    # Fallback: create a new scaler (shouldn't happen in normal usage)
+                    self.scaler = StandardScaler()
+                    # Fit on training data as fallback - load b1c0 training data
+                    train_csv = os.path.join(self.root_path, 'b1c0_for_model.csv')
+                    if os.path.exists(train_csv):
+                        train_df = pd.read_csv(train_csv)
+                        train_df['timestamp'] = pd.to_datetime(train_df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
+                        train_df = train_df.set_index('timestamp')
+                        train_features = [col for col in battery_features if col in train_df.columns]
+                        train_data = train_df[train_features].iloc[:int(0.7 * len(train_df))].values
+                        self.scaler.fit(train_data)
+            data = self.scaler.transform(data_values)
+        else:
+            data = data_values
+        
+        # Create time stamps (cycle-based)
+        timestamps = split_data.index.values
+        df_stamp = pd.DataFrame({'timestamp': timestamps})
+        df_stamp['timestamp'] = pd.to_datetime(df_stamp['timestamp'])
+        
+        if self.timeenc == 0:
+            df_stamp['month'] = df_stamp['timestamp'].dt.month
+            df_stamp['day'] = df_stamp['timestamp'].dt.day
+            df_stamp['weekday'] = df_stamp['timestamp'].dt.weekday
+            df_stamp['hour'] = df_stamp['timestamp'].dt.hour
+            data_stamp = df_stamp[['month', 'day', 'weekday', 'hour']].values
+        elif self.timeenc == 1:
+            # Convert to DatetimeIndex for time_features
+            timestamp_index = pd.DatetimeIndex(df_stamp['timestamp'])
+            data_stamp = time_features(timestamp_index, freq=self.freq)
+            data_stamp = data_stamp.transpose(1, 0)
+        
+        self.data_x = data
+        self.data_y = data
+        self.data_stamp = data_stamp
+        self.feature_names = feature_cols
+        
+        # Apply augmentation if specified
+        if self.set_type == 0 and hasattr(self.args, 'augmentation_ratio') and self.args.augmentation_ratio > 0:
+            self.data_x, self.data_y, augmentation_tags = run_augmentation_single(self.data_x, self.data_y, self.args)
+
+    def __getitem__(self, index):
+        s_begin = index
+        s_end = s_begin + self.seq_len
+        r_begin = s_end - self.label_len
+        r_end = r_begin + self.label_len + self.pred_len
+
+        seq_x = self.data_x[s_begin:s_end]
+        seq_y = self.data_y[r_begin:r_end]
+        seq_x_mark = self.data_stamp[s_begin:s_end]
+        seq_y_mark = self.data_stamp[r_begin:r_end]
+
+        return seq_x, seq_y, seq_x_mark, seq_y_mark
+
+    def __len__(self):
+        return len(self.data_x) - self.seq_len - self.pred_len + 1
+
+    def inverse_transform(self, data):
+        return self.scaler.inverse_transform(data)
+
+
 class UEAloader(Dataset):
     """
     Dataset class for datasets included in:
