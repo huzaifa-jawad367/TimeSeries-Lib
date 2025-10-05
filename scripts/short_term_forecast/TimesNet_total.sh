@@ -50,6 +50,7 @@ python -u run.py \
   --embed timeF \
   --patience 3 \
   --dropout 0.1 \
-  --lradj type1
+  --lradj type1 \
+  --use_amp
 
 echo "Training completed!"
