@@ -133,11 +133,40 @@ class Exp_Short_Term_Forecast(Exp_Basic):
         return self.model
 
     def vali(self, train_loader, vali_loader, criterion):
-        x, _ = train_loader.dataset.last_insample_window()
-        y = vali_loader.dataset.timeseries
-        x = torch.tensor(x, dtype=torch.float32).to(self.device)
-        x = x.unsqueeze(-1)
+        # Handle different dataset types
+        if hasattr(self.args, 'data') and self.args.data == 'm4':
+            # M4 dataset validation
+            x, _ = train_loader.dataset.last_insample_window()
+            y = vali_loader.dataset.timeseries
+            x = torch.tensor(x, dtype=torch.float32).to(self.device)
+            x = x.unsqueeze(-1)
+        else:
+            # Standard dataset validation (like battery)
+            self.model.eval()
+            total_loss = []
+            with torch.no_grad():
+                for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(vali_loader):
+                    batch_x = batch_x.float().to(self.device)
+                    batch_y = batch_y.float().to(self.device)
+                    batch_y_mark = batch_y_mark.float().to(self.device)
 
+                    # decoder input
+                    dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                    dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+
+                    outputs = self.model(batch_x, None, dec_inp, None)
+
+                    f_dim = -1 if self.args.features == 'MS' else 0
+                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
+                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+
+                    loss = criterion(outputs, batch_y)
+                    total_loss.append(loss.item())
+
+            self.model.train()
+            return np.average(total_loss)
+
+        # Continue with M4 validation logic
         self.model.eval()
         with torch.no_grad():
             # decoder input
@@ -158,18 +187,18 @@ class Exp_Short_Term_Forecast(Exp_Basic):
             true = torch.from_numpy(np.array(y))
             batch_y_mark = torch.ones(true.shape)
 
-            # Handle different loss function signatures
-            if hasattr(self.args, 'data') and self.args.data == 'm4':
-                # M4 dataset uses custom loss with multiple arguments
-                loss = criterion(x.detach().cpu()[:, :, 0], self.args.frequency_map, pred[:, :, 0], true, batch_y_mark)
-            else:
-                # Standard loss functions only need prediction and target
-                loss = criterion(pred[:, :, 0], true)
+            # M4 dataset uses custom loss with multiple arguments
+            loss = criterion(x.detach().cpu()[:, :, 0], self.args.frequency_map, pred[:, :, 0], true, batch_y_mark)
 
         self.model.train()
         return loss
 
     def test(self, setting, test=0):
+        # Handle different dataset types
+        if not (hasattr(self.args, 'data') and self.args.data == 'm4'):
+            print("Test function is currently only supported for M4 dataset. Skipping test for battery dataset.")
+            return
+            
         _, train_loader = self._get_data(flag='train')
         _, test_loader = self._get_data(flag='test')
         x, _ = train_loader.dataset.last_insample_window()
