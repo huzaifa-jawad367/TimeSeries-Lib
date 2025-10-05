@@ -8,6 +8,7 @@
 # - Test: All cycles from other CSV files (excluding b1c0)
 
 export CUDA_VISIBLE_DEVICES=0
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 model_name=TimesNet
 
@@ -20,7 +21,7 @@ echo "Using Lag-Llama optimized parameters..."
 python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
-  --root_path ../../total \
+  --root_path /content/drive/MyDrive/total \
   --model_id battery_total_lagllama_params \
   --model $model_name \
   --data battery \
@@ -35,7 +36,7 @@ python -u run.py \
   --enc_in 6 \
   --dec_in 6 \
   --c_out 6 \
-  --batch_size 64 \
+  --batch_size 8 \
   --d_model 512 \
   --d_ff 2048 \
   --n_heads 8 \
