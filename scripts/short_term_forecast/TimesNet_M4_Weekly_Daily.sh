@@ -31,8 +31,9 @@ python -u run.py \
   --dec_in 1 \
   --c_out 1 \
   --batch_size 16 \
-  --d_model 16 \
-  --d_ff 16 \
+  --d_model 384 \
+  --d_ff 1536 \
+  --n_heads 6 \
   --top_k 5 \
   --des 'Exp' \
   --itr 1 \
@@ -61,8 +62,9 @@ python -u run.py \
   --dec_in 1 \
   --c_out 1 \
   --batch_size 16 \
-  --d_model 32 \
-  --d_ff 32 \
+  --d_model 384 \
+  --d_ff 1536 \
+  --n_heads 6 \
   --top_k 5 \
   --des 'Exp' \
   --itr 1 \
