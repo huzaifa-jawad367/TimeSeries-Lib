@@ -78,24 +78,99 @@ class M4Dataset:
     horizons: np.ndarray
     values: np.ndarray
 
+    # Original NPZ-based loader (commented out)
+    # @staticmethod
+    # def load(training: bool = True, dataset_file: str = '../dataset/m4') -> 'M4Dataset':
+    #     """
+    #     Load cached dataset.
+    #
+    #     :param training: Load training part if training is True, test part otherwise.
+    #     """
+    #     info_file = os.path.join(dataset_file, 'M4-info.csv')
+    #     train_cache_file = os.path.join(dataset_file, 'training.npz')
+    #     test_cache_file = os.path.join(dataset_file, 'test.npz')
+    #     m4_info = pd.read_csv(info_file)
+    #     return M4Dataset(ids=m4_info.M4id.values,
+    #                      groups=m4_info.SP.values,
+    #                      frequencies=m4_info.Frequency.values,
+    #                      horizons=m4_info.Horizon.values,
+    #                      values=np.load(
+    #                          train_cache_file if training else test_cache_file,
+    #                          allow_pickle=True))
+    
     @staticmethod
     def load(training: bool = True, dataset_file: str = '../dataset/m4') -> 'M4Dataset':
         """
-        Load cached dataset.
-
+        Load M4 dataset from CSV files.
+        
         :param training: Load training part if training is True, test part otherwise.
+        :param dataset_file: Path to directory containing M4 CSV files
         """
+        # Load M4 info file
         info_file = os.path.join(dataset_file, 'M4-info.csv')
-        train_cache_file = os.path.join(dataset_file, 'training.npz')
-        test_cache_file = os.path.join(dataset_file, 'test.npz')
         m4_info = pd.read_csv(info_file)
-        return M4Dataset(ids=m4_info.M4id.values,
-                         groups=m4_info.SP.values,
-                         frequencies=m4_info.Frequency.values,
-                         horizons=m4_info.Horizon.values,
-                         values=np.load(
-                             train_cache_file if training else test_cache_file,
-                             allow_pickle=True))
+        
+        # Load all seasonal pattern CSV files
+        seasonal_patterns = ['Yearly', 'Quarterly', 'Monthly', 'Weekly', 'Daily', 'Hourly']
+        all_ids = []
+        all_values = []
+        
+        for pattern in seasonal_patterns:
+            # Construct CSV file name
+            if training:
+                csv_file = os.path.join(dataset_file, f'{pattern}-train.csv')
+            else:
+                csv_file = os.path.join(dataset_file, f'{pattern}-test.csv')
+            
+            # Check if file exists
+            if not os.path.exists(csv_file):
+                print(f'Warning: {csv_file} not found, skipping {pattern}')
+                continue
+            
+            # Read CSV file
+            df = pd.read_csv(csv_file)
+            
+            # First column contains IDs, remaining columns contain values
+            ids = df.iloc[:, 0].values  # First column: series IDs
+            values = df.iloc[:, 1:].values  # Remaining columns: time series values
+            
+            # Convert to list of arrays (handle variable length by removing trailing NaNs)
+            for i, row in enumerate(values):
+                # Remove trailing NaNs
+                valid_values = row[~pd.isna(row)]
+                all_values.append(valid_values)
+                all_ids.append(ids[i])
+        
+        # Convert to numpy arrays
+        all_ids = np.array(all_ids)
+        all_values = np.array(all_values, dtype=object)
+        
+        # Get corresponding metadata from M4-info
+        # Create a mapping from ID to info
+        info_dict = {row['M4id']: row for _, row in m4_info.iterrows()}
+        
+        groups = []
+        frequencies = []
+        horizons = []
+        
+        for id_val in all_ids:
+            if id_val in info_dict:
+                groups.append(info_dict[id_val]['SP'])
+                frequencies.append(info_dict[id_val]['Frequency'])
+                horizons.append(info_dict[id_val]['Horizon'])
+            else:
+                # Default values if not found in info
+                groups.append('Unknown')
+                frequencies.append(1)
+                horizons.append(6)
+        
+        return M4Dataset(
+            ids=all_ids,
+            groups=np.array(groups),
+            frequencies=np.array(frequencies),
+            horizons=np.array(horizons),
+            values=all_values
+        )
 
 
 @dataclass()

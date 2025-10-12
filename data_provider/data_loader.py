@@ -338,10 +338,21 @@ class Dataset_M4(Dataset):
             dataset = M4Dataset.load(training=True, dataset_file=self.root_path)
         else:
             dataset = M4Dataset.load(training=False, dataset_file=self.root_path)
-        training_values = np.array(
-            [v[~np.isnan(v)] for v in
-             dataset.values[dataset.groups == self.seasonal_patterns]])  # split different frequencies
-        self.ids = np.array([i for i in dataset.ids[dataset.groups == self.seasonal_patterns]])
+        
+        # Filter by seasonal pattern
+        pattern_mask = dataset.groups == self.seasonal_patterns
+        filtered_values = dataset.values[pattern_mask]
+        
+        # Check if values already have NaN or are clean (CSV loader removes NaN already)
+        # Try to filter NaN, but if values are already clean, use them directly
+        try:
+            training_values = np.array(
+                [v[~np.isnan(v)] for v in filtered_values])  # split different frequencies
+        except (ValueError, TypeError):
+            # Values are already clean or have inconsistent shapes, use as list
+            training_values = [v if isinstance(v, np.ndarray) else np.array(v) for v in filtered_values]
+        
+        self.ids = np.array([i for i in dataset.ids[pattern_mask]])
         self.timeseries = [ts for ts in training_values]
 
     def __getitem__(self, index):
