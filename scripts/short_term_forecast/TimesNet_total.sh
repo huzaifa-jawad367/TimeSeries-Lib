@@ -22,6 +22,7 @@ python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
   --root_path /content/drive/MyDrive/total \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
   --model_id battery_total_lagllama_params \
   --model $model_name \
   --data battery \

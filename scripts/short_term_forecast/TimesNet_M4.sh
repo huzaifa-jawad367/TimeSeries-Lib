@@ -5,7 +5,8 @@ model_name=TimesNet
 python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
-  --root_path ./dataset/m4 \
+  --root_path /content/drive/MyDrive/M4 \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
   --seasonal_patterns 'Monthly' \
   --model_id m4_Monthly \
   --model $model_name \
@@ -29,7 +30,8 @@ python -u run.py \
 python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
-  --root_path ./dataset/m4 \
+  --root_path /content/drive/MyDrive/M4 \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
   --seasonal_patterns 'Yearly' \
   --model_id m4_Yearly \
   --model $model_name \
@@ -53,7 +55,8 @@ python -u run.py \
 python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
-  --root_path ./dataset/m4 \
+  --root_path /content/drive/MyDrive/M4 \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
   --seasonal_patterns 'Quarterly' \
   --model_id m4_Quarterly \
   --model $model_name \
@@ -77,7 +80,8 @@ python -u run.py \
 python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
-  --root_path ./dataset/m4 \
+  --root_path /content/drive/MyDrive/M4 \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
   --seasonal_patterns 'Daily' \
   --model_id m4_Daily \
   --model $model_name \
@@ -101,7 +105,8 @@ python -u run.py \
 python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
-  --root_path ./dataset/m4 \
+  --root_path /content/drive/MyDrive/M4 \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
   --seasonal_patterns 'Weekly' \
   --model_id m4_Weekly \
   --model $model_name \
@@ -125,7 +130,8 @@ python -u run.py \
 python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
-  --root_path ./dataset/m4 \
+  --root_path /content/drive/MyDrive/M4 \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
   --seasonal_patterns 'Hourly' \
   --model_id m4_Hourly \
   --model $model_name \
