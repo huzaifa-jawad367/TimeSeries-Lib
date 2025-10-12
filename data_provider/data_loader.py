@@ -655,51 +655,73 @@ class Dataset_Battery(Dataset):
         import pickle
         
         # Load battery data based on train/val/test split
+        battery_features = ['charge_capacity', 'discharge_capacity', 'internal_resistance', 
+                          'temperature_mean', 'temperature_min', 'temperature_max']
+        
         if self.set_type == 0 or self.set_type == 1:  # train or val - use b1c0_for_model.csv
             csv_file = os.path.join(self.root_path, 'b1c0_for_model.csv')
             if not os.path.exists(csv_file):
                 raise FileNotFoundError(f"Training CSV file not found: {csv_file}")
-        else:  # test - use other CSV files
-            # Look for other CSV files (excluding b1c0)
-            csv_files = glob.glob(os.path.join(self.root_path, '*_for_model.csv'))
-            csv_files = [f for f in csv_files if 'b1c0' not in f]
             
-            if not csv_files:
-                raise FileNotFoundError(f"No test CSV files found in {self.root_path} (excluding b1c0)")
+            # Load battery series
+            df = pd.read_csv(csv_file)
+            series_id = os.path.basename(csv_file).replace('_for_model.csv', '')
             
-            # Use the first available test file (or could be randomized)
-            csv_file = csv_files[0]
-        
-        # Load battery series
-        df = pd.read_csv(csv_file)
-        series_id = os.path.basename(csv_file).replace('_for_model.csv', '')
-        
-        # Create timestamp from cycle_index
-        df['timestamp'] = pd.to_datetime(df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
-        df = df.set_index('timestamp')
-        
-        # Select relevant columns
-        battery_features = ['charge_capacity', 'discharge_capacity', 'internal_resistance', 
-                          'temperature_mean', 'temperature_min', 'temperature_max']
-        
-        # Ensure all required columns exist
-        available_features = [col for col in battery_features if col in df.columns]
-        if not available_features:
-            raise ValueError(f"No valid battery features found in {csv_file}. Available columns: {df.columns.tolist()}")
+            # Create timestamp from cycle_index
+            df['timestamp'] = pd.to_datetime(df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
+            df = df.set_index('timestamp')
             
-        df_subset = df[available_features].astype('float32')
-        
-        # Split data based on train/val/test
-        if self.set_type == 0 or self.set_type == 1:  # train or val from b1c0
+            # Ensure all required columns exist
+            available_features = [col for col in battery_features if col in df.columns]
+            if not available_features:
+                raise ValueError(f"No valid battery features found in {csv_file}. Available columns: {df.columns.tolist()}")
+                
+            df_subset = df[available_features].astype('float32')
+            
+            # Split data based on train/val
             total_length = len(df_subset)
             train_end = int(0.7 * total_length)
             
             if self.set_type == 0:  # train
                 split_data = df_subset.iloc[:train_end].copy()
+                print(f'✅ Loaded training data from b1c0: {len(split_data)} cycles (first 70%)')
             else:  # val
                 split_data = df_subset.iloc[train_end:].copy()
-        else:  # test - use all data from other CSV files
-            split_data = df_subset.copy()
+                print(f'✅ Loaded validation data from b1c0: {len(split_data)} cycles (last 30%)')
+                
+        else:  # test - use ALL other CSV files (excluding b1c0)
+            # Look for all other CSV files (excluding b1c0)
+            csv_files = glob.glob(os.path.join(self.root_path, '*_for_model.csv'))
+            csv_files = sorted([f for f in csv_files if 'b1c0' not in f])
+            
+            if not csv_files:
+                raise FileNotFoundError(f"No test CSV files found in {self.root_path} (excluding b1c0)")
+            
+            print(f'✅ Loading test data from {len(csv_files)} battery files (excluding b1c0)')
+            
+            # Load and concatenate ALL test battery files
+            all_test_data = []
+            for csv_file in csv_files:
+                try:
+                    df = pd.read_csv(csv_file)
+                    df['timestamp'] = pd.to_datetime(df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
+                    df = df.set_index('timestamp')
+                    
+                    # Select available features
+                    available_features = [col for col in battery_features if col in df.columns]
+                    if available_features:
+                        df_features = df[available_features].astype('float32')
+                        all_test_data.append(df_features)
+                except Exception as e:
+                    print(f'⚠️  Warning: Could not load {csv_file}: {e}')
+                    continue
+            
+            if not all_test_data:
+                raise ValueError("No valid test data loaded from CSV files")
+            
+            # Concatenate all test data
+            split_data = pd.concat(all_test_data, ignore_index=True)
+            print(f'✅ Total test data: {len(split_data)} cycles from {len(all_test_data)} batteries')
         
         # Reset index for processing
         split_data = split_data.reset_index(drop=True)
@@ -708,56 +730,35 @@ class Dataset_Battery(Dataset):
         feature_cols = split_data.columns.tolist()
         data_values = split_data.values
         
-        # Handle scaling - fit scaler on training data and save/load it
-        scaler_path = os.path.join(self.root_path, 'battery_scaler.pkl')
+        # Handle scaling - always compute scaler from b1c0 training data
         if self.scale:
-            if self.set_type == 0:  # Training data - fit scaler
-                self.scaler = StandardScaler()
+            self.scaler = StandardScaler()
+            
+            if self.set_type == 0:  # Training data - fit scaler on training data
                 self.scaler.fit(data_values)
-                # Save scaler for validation and test sets
-                try:
-                    with open(scaler_path, 'wb') as f:
-                        pickle.dump(self.scaler, f)
-                    print(f'✅ Scaler saved to {scaler_path}')
-                except Exception as e:
-                    print(f'⚠️  Warning: Could not save scaler to {scaler_path}: {e}')
-            else:  # Validation or test data - load fitted scaler
-                if os.path.exists(scaler_path):
+                print(f'✅ Scaler fitted on training data (b1c0, first 70%)')
+            else:  # Validation or test data - fit scaler on b1c0 training data
+                # Always load b1c0 training data to fit scaler
+                train_csv = os.path.join(self.root_path, 'b1c0_for_model.csv')
+                if os.path.exists(train_csv):
                     try:
-                        with open(scaler_path, 'rb') as f:
-                            self.scaler = pickle.load(f)
-                        print(f'✅ Scaler loaded from {scaler_path}')
+                        train_df = pd.read_csv(train_csv)
+                        train_df['timestamp'] = pd.to_datetime(train_df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
+                        train_df = train_df.set_index('timestamp')
+                        train_features = [col for col in battery_features if col in train_df.columns]
+                        train_data = train_df[train_features].iloc[:int(0.7 * len(train_df))].values
+                        self.scaler.fit(train_data)
+                        print(f'✅ Scaler fitted on b1c0 training data (first 70% of cycles)')
                     except Exception as e:
-                        print(f'⚠️  Warning: Could not load scaler from {scaler_path}: {e}')
-                        self.scaler = None
-                else:
-                    print(f'⚠️  Warning: Scaler file {scaler_path} not found. Creating fallback scaler.')
-                    self.scaler = None
-                
-                # If scaler is None (file missing or corrupted), create fallback
-                if self.scaler is None:
-                    self.scaler = StandardScaler()
-                    # Fit on training data as fallback - load b1c0 training data
-                    train_csv = os.path.join(self.root_path, 'b1c0_for_model.csv')
-                    if os.path.exists(train_csv):
-                        try:
-                            train_df = pd.read_csv(train_csv)
-                            train_df['timestamp'] = pd.to_datetime(train_df['cycle_index'], unit='D', origin=pd.Timestamp("2000-01-01"))
-                            train_df = train_df.set_index('timestamp')
-                            train_features = [col for col in battery_features if col in train_df.columns]
-                            train_data = train_df[train_features].iloc[:int(0.7 * len(train_df))].values
-                            self.scaler.fit(train_data)
-                            print(f'✅ Fallback scaler fitted on training data from {train_csv}')
-                        except Exception as e:
-                            print(f'❌ Error creating fallback scaler from training data: {e}')
-                            # Last resort: fit on current data
-                            self.scaler.fit(data_values)
-                            print('⚠️  Warning: Using current data for scaler fitting (not recommended)')
-                    else:
-                        print(f'❌ Error: Training CSV {train_csv} not found for fallback scaler')
+                        print(f'❌ Error loading b1c0 for scaler: {e}')
                         # Last resort: fit on current data
                         self.scaler.fit(data_values)
                         print('⚠️  Warning: Using current data for scaler fitting (not recommended)')
+                else:
+                    print(f'❌ Error: Training CSV {train_csv} not found')
+                    # Last resort: fit on current data
+                    self.scaler.fit(data_values)
+                    print('⚠️  Warning: Using current data for scaler fitting (not recommended)')
             
             data = self.scaler.transform(data_values)
         else:

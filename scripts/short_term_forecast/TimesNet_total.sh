@@ -37,13 +37,13 @@ python -u run.py \
   --dec_in 6 \
   --c_out 6 \
   --batch_size 4 \
-  --d_model 256 \
-  --d_ff 512 \
-  --n_heads 4 \
+  --d_model 512 \
+  --d_ff 2048 \
+  --n_heads 8 \
   --top_k 5 \
   --des 'Battery_Forecast_LagLlamaParams' \
   --itr 1 \
-  --train_epochs 5 \
+  --train_epochs 50 \
   --learning_rate 0.001 \
   --loss MSE \
   --freq d \
