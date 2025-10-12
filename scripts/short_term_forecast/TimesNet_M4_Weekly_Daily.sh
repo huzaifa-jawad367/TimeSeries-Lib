@@ -18,7 +18,7 @@ python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
   --root_path /content/drive/MyDrive/M4 \
-  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series/M4_Daily' \
   --seasonal_patterns 'Daily' \
   --model_id m4_Daily \
   --model $model_name \
@@ -48,7 +48,7 @@ python -u run.py \
   --task_name short_term_forecast \
   --is_training 1 \
   --root_path /content/drive/MyDrive/M4 \
-  --checkpoints '/content/drive/MyDrive/Model pths/time_series' \
+  --checkpoints '/content/drive/MyDrive/Model pths/time_series/M4_Weekly' \
   --seasonal_patterns 'Weekly' \
   --model_id m4_Weekly \
   --model $model_name \
