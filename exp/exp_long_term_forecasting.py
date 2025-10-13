@@ -81,6 +81,20 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
             os.makedirs(path)
+        
+        # Load pretrained checkpoint if specified
+        if hasattr(self.args, 'pretrained_checkpoint') and self.args.pretrained_checkpoint:
+            if os.path.exists(self.args.pretrained_checkpoint):
+                print(f'Loading pretrained model from: {self.args.pretrained_checkpoint}')
+                try:
+                    self.model.load_state_dict(torch.load(self.args.pretrained_checkpoint, map_location=self.device))
+                    print('✅ Pretrained model loaded successfully!')
+                except Exception as e:
+                    print(f'⚠️  Warning: Could not load pretrained model: {e}')
+                    print('Starting with random initialization instead.')
+            else:
+                print(f'⚠️  Warning: Pretrained checkpoint not found: {self.args.pretrained_checkpoint}')
+                print('Starting with random initialization instead.')
 
         time_now = time.time()
 

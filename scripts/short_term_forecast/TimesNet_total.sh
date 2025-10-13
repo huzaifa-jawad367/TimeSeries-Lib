@@ -38,9 +38,9 @@ python -u run.py \
   --dec_in 6 \
   --c_out 6 \
   --batch_size 4 \
-  --d_model 512 \
-  --d_ff 2048 \
-  --n_heads 8 \
+  --d_model 384 \
+  --d_ff 1536 \
+  --n_heads 6 \
   --top_k 5 \
   --des 'Battery_Forecast_LagLlamaParams' \
   --itr 1 \
