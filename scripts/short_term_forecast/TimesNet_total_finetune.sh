@@ -12,12 +12,24 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 model_name=TimesNet
 
-# IMPORTANT: Set the path to your pretrained checkpoint here
+# ⚠️  IMPORTANT: Set the path to your pretrained checkpoint here
+# ⚠️  The checkpoint MUST have matching architecture:
+# ⚠️  - d_model=384, n_heads=6, d_ff=1536 (as specified below)
+# ⚠️  Look for checkpoint path containing: dm384_nh6_el2_dl1_df1536
+# 
 # Example: '/content/drive/MyDrive/Model pths/time_series/M4_Weekly/short_term_forecast_m4_Weekly_TimesNet_m4_ftM_sl26_ll13_pl13_dm384_nh6_el2_dl1_df1536_expand2_dc4_fc3_ebtimeF_dtTrue_Exp_0/checkpoint.pth'
-PRETRAINED_CHECKPOINT='/content/drive/MyDrive/Model pths/time_series/M4_Weekly1/short_term_forecast_m4_Weekly_TimesNet_m4_ftM_sl26_ll13_pl13_dm32_nh8_el2_dl1_df32_expand2_dc4_fc3_ebtimeF_dtTrue_Exp_0/checkpoint.pth'
+PRETRAINED_CHECKPOINT='/content/drive/MyDrive/Model pths/time_series/M4_Weekly/short_term_forecast_m4_Weekly_TimesNet_m4_ftM_sl26_ll13_pl13_dm384_nh6_el2_dl1_df1536_expand2_dc4_fc3_ebtimeF_dtTrue_Exp_0/checkpoint.pth'
 
-echo "Starting TimesNet fine-tuning on battery data..."
+echo "⚠️  ============================================"
+echo "⚠️  ARCHITECTURE COMPATIBILITY CHECK"
+echo "⚠️  ============================================"
+echo "Fine-tuning script requires: d_model=384, n_heads=6, d_ff=1536"
 echo "Pretrained checkpoint: $PRETRAINED_CHECKPOINT"
+echo "Please verify the checkpoint path contains: dm384_nh6_df1536"
+echo "If not, the model loading will FAIL!"
+echo "⚠️  ============================================"
+echo ""
+echo "Starting TimesNet fine-tuning on battery data..."
 echo "Training data: b1c0_for_model.csv (70% for train, 30% for val)"
 echo "Test data: All other CSV files in total/"
 echo "Features: charge_capacity, discharge_capacity, internal_resistance, temperature_mean, temperature_min, temperature_max"
